@@ -12,37 +12,39 @@ ENV HAPROXY_MD5 5290f278c04e682e42ab71fed26fc082
 ENV LUA_VERSION 5.3.0
 ENV LUA_VERSION_SHORT 53
 
-# for certbot
-RUN echo "deb http://ftp.debian.org/debian jessie-backports main" > /etc/apt/sources.list.d/jessie.backports.list
-
 ENV BUILD_DEPS="curl gcc libc6-dev libpcre3-dev libssl-dev libreadline-dev make patch"
 ENV RUN_DEPS="ca-certificates cron libssl1.0 libpcre3 logrotate nano rsyslog"
-
-RUN set -x \
- && apt-get update && apt-get install -y --force-yes --no-install-recommends \
-        $BUILD_DEPS \
-        $RUN_DEPS \
- && apt-get install --no-install-recommends -yqq certbot -t jessie-backports
-
-RUN cd /usr/src \
-    && curl -R -O http://www.lua.org/ftp/lua-${LUA_VERSION}.tar.gz \
-    && tar zxf lua-${LUA_VERSION}.tar.gz \
-    && rm lua-${LUA_VERSION}.tar.gz \
-    && cd lua-${LUA_VERSION} \
-    && make linux \
-    && make INSTALL_TOP=/opt/lua${LUA_VERSION_SHORT} install
 
 # see http://discourse.haproxy.org/t/dynamic-dns-resolution-does-not-work-for-me-after-1-6-4-to-1-6-5-upgrade/310/2
 COPY haproxy-dns.patch /tmp
 
-RUN curl -SL "http://www.haproxy.org/download/${HAPROXY_MAJOR}/src/haproxy-${HAPROXY_VERSION}.tar.gz" -o haproxy.tar.gz \
-	&& echo "${HAPROXY_MD5}  haproxy.tar.gz" | md5sum -c \
-	&& mkdir -p /usr/src/haproxy \
-	&& tar -xzf haproxy.tar.gz -C /usr/src/haproxy --strip-components=1 \
-	&& rm haproxy.tar.gz \
-	&& patch -d /usr/src/haproxy -p1 < /tmp/haproxy-dns.patch \
-	&& rm /tmp/haproxy-*.patch \
-	&& make -C /usr/src/haproxy \
+RUN set -x \
+ # for certbot
+ && echo "deb http://ftp.debian.org/debian jessie-backports main" > /etc/apt/sources.list.d/jessie.backports.list \
+ && apt-get update \
+ && apt-get install -y --force-yes --no-install-recommends \
+        $BUILD_DEPS \
+        $RUN_DEPS \
+ && apt-get install --no-install-recommends -yqq certbot -t jessie-backports \
+
+ # install LUA from source
+ && cd /usr/src \
+ && curl -R -O http://www.lua.org/ftp/lua-${LUA_VERSION}.tar.gz \
+ && tar zxf lua-${LUA_VERSION}.tar.gz \
+ && rm lua-${LUA_VERSION}.tar.gz \
+ && cd lua-${LUA_VERSION} \
+ && make linux \
+ && make INSTALL_TOP=/opt/lua${LUA_VERSION_SHORT} install \
+
+ # patch and install HAProxy
+ && curl -SL "http://www.haproxy.org/download/${HAPROXY_MAJOR}/src/haproxy-${HAPROXY_VERSION}.tar.gz" -o haproxy.tar.gz \
+ && echo "${HAPROXY_MD5}  haproxy.tar.gz" | md5sum -c \
+ && mkdir -p /usr/src/haproxy \
+ && tar -xzf haproxy.tar.gz -C /usr/src/haproxy --strip-components=1 \
+ && rm haproxy.tar.gz \
+ && patch -d /usr/src/haproxy -p1 < /tmp/haproxy-dns.patch \
+ && rm /tmp/haproxy-*.patch \
+ && make -C /usr/src/haproxy \
         CPU=native \
 		TARGET=linux2628 \
         USE_LUA=1 \
@@ -53,22 +55,26 @@ RUN curl -SL "http://www.haproxy.org/download/${HAPROXY_MAJOR}/src/haproxy-${HAP
         USE_ZLIB=1 \
 		all \
 		install-bin \
-	&& mkdir -p /etc/haproxy \
-	&& rm -rf /usr/src/haproxy \
-	&& apt-get purge -y --auto-remove $BUILD_DEPS
+ && mkdir -p /etc/haproxy \
+ && rm -rf /usr/src/haproxy \
+ && apt-get purge -y --auto-remove $BUILD_DEPS \
+ && rm -rf /var/lib/apt/lists/* \
 
-RUN groupadd haproxy \
+ # for running HAProxy in its own user/group
+ && groupadd haproxy \
  && useradd -r -g haproxy haproxy \
+ # for rsyslog
  && groupadd syslog \
- && useradd -r -g syslog syslog
+ && useradd -r -g syslog syslog \
 
-RUN mkdir -p /etc/haproxy.d \
-  && mkdir -p /etc/rsyslog.d \
-  && mkdir -p /etc/letsencrypt \
-  && mkdir -p /etc/logrotate.d \
-  && mkdir -p /var/lib/haproxy \
-  && mkdir -p /var/log/haproxy \
-  && chown root:syslog /var/log
+ # for configuring rsyslog and logrotate
+ && mkdir -p /etc/haproxy.d \
+ && mkdir -p /etc/rsyslog.d \
+ && mkdir -p /etc/letsencrypt \
+ && mkdir -p /etc/logrotate.d \
+ && mkdir -p /var/lib/haproxy \
+ && mkdir -p /var/log/haproxy \
+ && chown root:syslog /var/log
 
 # See https://github.com/janeczku/haproxy-acme-validation-plugin
 COPY haproxy-acme-validation-plugin/acme-http01-webroot.lua /etc/haproxy

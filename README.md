@@ -3,7 +3,7 @@ HAProxy with ACME domain validation plugin
 
 Features:
 
-* HAProxy 1.6.5 with the DNS resolution error patched
+* HAProxy 1.6.5 with the DNS resolution error [patched](http://discourse.haproxy.org/t/dynamic-dns-resolution-does-not-work-for-me-after-1-6-4-to-1-6-5-upgrade/310/2)
 * Support splitting configuration into multiple files
 * Writing logs to file via rsyslog and rotating log files
 * Generating Let's Encrypt certificates via the [ACME domain validation plugin](https://github.com/janeczku/haproxy-acme-validation-plugin)
@@ -96,4 +96,17 @@ or when you are inside the container
 
 ```
 pkill -HUP haproxy
+```
+
+# Build this image
+
+```
+docker build --rm=true -t baoho/haproxy-letsencrypt:1.6.5 .
+```
+
+# Push the image to Docker Hub
+
+```
+docker login
+docker push baoho/haproxy-letsencrypt:1.6.5
 ```
